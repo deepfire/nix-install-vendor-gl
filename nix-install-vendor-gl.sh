@@ -4,6 +4,13 @@
 # Credits:  the original investigation of the issue is due to:
 #             clever @ #nixos, https://github.com/cleverca22
 #
+# To add a new driver stack, the following 6 functions need to be modified:
+#
+#  compute_system_vendorgl_kind,  compute_system_vendorgl_version,
+#  nix_vendorgl_attribute,  nix_vendorgl_version_get_attribute_name,
+#  nix_vendorgl_package_compute_url, nix_vendorgl_package_name
+#
+
 explain() {
 	cat <<EOF
 
@@ -248,10 +255,14 @@ then dump
 
 ### Main functionality.
 ###
-test "${nix_opengl_broken}" = "yes" || {
+if test $# -ge 1
+then argnz "OPERATION"; operation=$1; shift
+else operation=${default_operation}; fi
+
+test "${nix_opengl_broken}" = "yes" -o "${operation}" == "examine" || {
 	info "Nix-available GL seems to be okay (according to glxinfo exit status)."
 	return 0; }
-test ! -f ${run_opengl_driver}/lib/libGL.so.1 ||
+test ! -f ${run_opengl_driver}/lib/libGL.so.1 -o "${operation}" == "examine" ||
 	! (LD_LIBRARY_PATH=${run_opengl_driver}/lib ${arg_nix_glxinfo} >/dev/null 2>&1) || {
 	info "A global libGL.so.1 already seems to be installed at\n${run_opengl_driver}/lib/libGL.so.1, and it appears to be sufficient for\nthe Nix 'glxinfo'.\n\n  export LD_LIBRARY_PATH=${run_opengl_driver}/lib\n"
 	export LD_LIBRARY_PATH=${run_opengl_driver}/lib
@@ -302,22 +313,25 @@ nix_vendorgl_package_compute_url() {
 		nvidia ) echo "http://download.nvidia.com/XFree86/Linux-x86_64/${system_vendorgl_version}/NVIDIA-Linux-x86_64-${system_vendorgl_version}.run";; esac; }
 nix_vendorgl_package_url="`nix_vendorgl_package_compute_url`"
 
+### 5. vendor GL Nix package name
+nix_vendorgl_package_name() {
+        case ${vendorgl} in
+		nvidia ) echo "nvidia-x11-${system_vendorgl_version}-\${pkgs.linuxPackages.kernel.version}";; esac; }
+
 ### Main & toplevel command dispatch
 ###
-if test $# -ge 1
-then argnz "OPERATION"; operation=$1; shift
-else operation=${default_operation}; fi
-
 case ${operation} in
 examine )
 	dump
 	cat <<EOF
 --------------------------------- General system info:
 $(lsb_release -a 2>&1)
---------------------------------- GL:
+--------------------------------- System GL:
 System GL vendor string:          ${system_vendorgl_client_string}
 System GL vendor kind:            ${vendorgl}
-Dystem GL vendor driver version:  ${system_vendorgl_version}
+System GL vendor driver version:  ${system_vendorgl_version}
+Vendor GL package URL:            $(nix_vendorgl_package_compute_url)
+Vengor GL Nix package name:       $(nix_vendorgl_package_name)
 --------------------------------- Nix:
 Nix version:                      $(nix-env --version)
 Nixpkgs:                          ${arg_nixpkgs}
@@ -332,7 +346,7 @@ install-vendor-gl )
 	tmpnix=`mktemp`
 	if test "`NIX_PATH=${NIX_PATH}:nixpkgs-overlays=/tmp/overlay; system_vendorgl_matches_nix_vendorgl`" != 'yes'
 	then
-		info "The version of the vendor driver in nixpkgs (${nix_vendorgl_driver_version})\ndoesn't match the system vendor driver version (${system_vendorgl_version}),\nso semi-automated vendor GL package download required.\n"
+		info "The version of the vendor driver in nixpkgs (${nix_vendorgl_driver_version})\ndoesn't match the system vendor driver version (${system_vendorgl_version}),\nso a semi-automated vendor GL package installation is required.\n"
 		nix_vendorgl_package_sha256=`nix-prefetch-url --type sha256 ${nix_vendorgl_package_url}`
 		cat >${tmpnix} <<EOF
 with import <nixpkgs> {};
@@ -340,7 +354,7 @@ let vendorgl = (${vendorgl_attribute}.override {
       libsOnly = true;
       kernel   = null;
     }).overrideAttrs (oldAttrs: rec {
-      name = "nvidia-x11-${system_vendorgl_version}-\${pkgs.linuxPackages.kernel.version}";
+      name = "$(nix_vendorgl_package_name)";
       src = fetchurl {
         url = "${nix_vendorgl_package_url}";
         sha256 = "${nix_vendorgl_package_sha256}";
