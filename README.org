@@ -1,0 +1,126 @@
+* =nix-install-vendor-gl.sh=
+
+  Ensure that a system-compatible OpenGL driver
+  is available for nix-shell-encapsulated programs.
+
+  This is an attempt at automated solution to https://github.com/NixOS/nixpkgs/issues/9415
+
+* Quickstart
+
+  - Prerequisites ::
+    1. Nix, obviously.
+    2. Both system and a Nix-provided =glxinfo='s:
+       - system one, likely, is at =/usr/bin/glxinfo=
+	 (If it is elsewhere, you would have to specify its path with =--system-glxinfo=)
+	 This one is installed with distro-specific means: =apt-get install mesa-utils=,
+	 =dnf install glx-utils=, or similar.
+       - Nix-provided should be at =~/.nix-profile/bin/glxinfo=, and can also be
+         similarly specified.
+
+  - Typical usage ::
+
+    1. Enter the shell, and face the error:
+
+       #+BEGIN_SRC bash
+       desktop@steamos:~/src/reflex-glfw$ nix-shell
+
+       [nix-shell:~/src/reflex-glfw]$ glxinfo
+       name of display: :1
+       libGL error: unable to load driver: swrast_dri.so
+       libGL error: failed to load driver: swrast
+       X Error of failed request:  GLXBadContext
+         Major opcode of failed request:  155 (GLX)
+         Minor opcode of failed request:  6 (X_GLXIsDirect)
+         Serial number of failed request:  54
+         Current serial number in output stream:  53
+       #+END_SRC
+
+    2. Rescue (/note the =.= dot) -- will require interactive input, due to a
+       =sudo= invocation:
+
+       #+BEGIN_SRC bash
+       [nix-shell:~/src/reflex-glfw]$ . ../nix-install-vendor-gl/nix-install-vendor-gl.sh
+       INFO: The version of the vendor driver in nixpkgs (375.26)
+       doesn't match the system vendor driver version (367.27),
+       so semi-automated vendor GL package download required.
+
+       downloading ‘http://download.nvidia.com/XFree86/Linux-x86_64/367.27/NVIDIA-Linux-x86_64-367.27.run’... [74251/75142 KiB, 3525.9 KiB/s]
+       path is ‘/nix/store/lfp9md7r5ms29wqy99bsayql8sh9fwbw-NVIDIA-Linux-x86_64-367.27.run’
+       /nix/store/4mxr3p5cl16fvmfqqj780937b5wrv1gn-opengl-drivers
+       Nix-compatible vendor GL driver is now installed at /run/opengl-driver
+
+       To make them available to Nix-build applications you can now issue:
+
+          export LD_LIBRARY_PATH=/run/opengl-driver/lib
+
+       (Doing the export, in case you have sourced the file directly.)
+       #+END_SRC
+
+    3. Proceed happily:
+
+       #+BEGIN_SRC bash
+       [nix-shell:~/src/reflex-glfw]$ glxinfo
+       name of display: :1
+       display: :1  screen: 0
+       direct rendering: Yes
+       server glx vendor string: NVIDIA Corporation
+       server glx version string: 1.4
+       server glx extensions:
+           GLX_ARB_context_flush_control, GLX_ARB_create_context,
+       #+END_SRC
+
+    3. The cases of re-activation are handled transparently:
+
+       #+BEGIN_SRC bash
+       [nix-shell:~/src/reflex-glfw]$ . ../nix-install-vendor-gl/nix-install-vendor-gl.sh
+       INFO: Nix-available GL seems to be okay (according to glxinfo exit status).
+
+       [nix-shell:~/src/reflex-glfw]$ exit
+       exit
+       desktop@steamos:~/src/reflex-glfw$ nix-shell
+
+       [nix-shell:~/src/reflex-glfw]$ . ../nix-install-vendor-gl/nix-install-vendor-gl.sh
+       INFO: A global libGL.so.1 already seems to be installed at
+       /run/opengl-driver/lib/libGL.so.1, and it appears to be sufficient for
+       the Nix 'glxinfo'.
+
+         export LD_LIBRARY_PATH=/run/opengl-driver/lib
+       #+END_SRC
+
+* Troubleshooting
+
+  Firstly, if anything goes wrong, please:
+
+  1. rerun the failing command with =--verbose=
+  2. file a bug report at https://github.com/deepfire/nix-install-vendor-gl/issues
+
+  Secondly, there's an =examine= subcommand:
+
+  #+BEGIN_QUOTE
+  
+  #+END_QUOTE
+
+* Why:
+
+  When one uses Nix to run Nix-encapsulated OpenGL software on non-NixOS, it's
+  not unlikely to encounter a similarly-looking error:
+
+    [nix-shell:~/src/reflex-glfw]$ dist/build/reflex-glfw-demo/reflex-glfw-demo
+    libGL error: unable to load driver: swrast_dri.so
+    libGL error: failed to load driver: swrast
+
+  This happens because nix isolates your program from the system, which implies
+  a purposeful ignorance of your host GL libraries.
+
+  However, these /particular/ host GL libraries are essential for your program to
+  be able to talk to your X server.
+
+  The issue is well-known:
+
+    https://github.com/NixOS/nixpkgs/issues/9415
+
+  So, it's a fairly fundamental conflict, and one solution is to supply a
+  sufficiently matching version of GL libraries (yes, that means your nVidia drivers)
+  using Nix itself.
+
+  Thankfully, it's not impossible -- this script attempts to be a proof.
