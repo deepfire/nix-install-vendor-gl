@@ -346,7 +346,7 @@ install-vendor-gl )
 	tmpnix=`mktemp`
 	if test "`NIX_PATH=${NIX_PATH}:nixpkgs-overlays=/tmp/overlay; system_vendorgl_matches_nix_vendorgl`" != 'yes'
 	then
-		info "The version of the vendor driver in nixpkgs (${nix_vendorgl_driver_version})\ndoesn't match the system vendor driver version (${system_vendorgl_version}),\nso a semi-automated vendor GL package installation is required.\n"
+		info "The version of the vendor driver in nixpkgs:  ${nix_vendorgl_driver_version}\ndoesn't match the system vendor driver version:     ${system_vendorgl_version}\n..so a semi-automated vendor GL package download is required.\n"
 		nix_vendorgl_package_sha256=`nix-prefetch-url --type sha256 ${nix_vendorgl_package_url}`
 		cat >${tmpnix} <<EOF
 with import <nixpkgs> {};

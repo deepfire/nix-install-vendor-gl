@@ -5,21 +5,32 @@
 
   This is an attempt at automated solution to https://github.com/NixOS/nixpkgs/issues/9415
 
-* Quickstart
+  The home of =nix-install-vendor-gl.sh= is at: https://github.com/deepfire/nix-install-vendor-gl
 
-  - Prerequisites ::
+*** Limitations
+
+    Currently only nVidia drivers are supported, although the infrastructure is
+    generalised sufficiently so, that adding support for a new driver stack should
+    amount to extending case statements in a number of functions -- the list is
+    here: https://github.com/deepfire/nix-install-vendor-gl/blob/master/nix-install-vendor-gl.sh#L7
+
+* Quickstart
+*** Prerequisites
+
     1. Nix, obviously.
-    2. Both system and a Nix-provided =glxinfo='s:
-       - system one, likely, is at =/usr/bin/glxinfo=
-	 (If it is elsewhere, you would have to specify its path with =--system-glxinfo=)
-	 This one is installed with distro-specific means: =apt-get install mesa-utils=,
-	 =dnf install glx-utils=, or similar.
-       - Nix-provided should be at =~/.nix-profile/bin/glxinfo=, and can also be
+    2. Both system and Nix-provided =glxinfo='s:
+
+       - system one :: likely, is at =/usr/bin/glxinfo= (if it is elsewhere, you
+         would have to specify its path with =--system-glxinfo=).  This one is
+         installed with distro-specific means: =apt-get install mesa-utils=, =dnf
+         install glx-utils=, or similar.
+
+       - Nix-provided :: should be at =~/.nix-profile/bin/glxinfo=, and can also be
          similarly specified.
 
-  - Typical usage ::
+*** Typical scenario ::
 
-    1. Enter the shell, and face the error:
+    1. Enter shell, face failure:
 
        #+BEGIN_SRC bash
        desktop@steamos:~/src/reflex-glfw$ nix-shell
@@ -35,14 +46,14 @@
          Current serial number in output stream:  53
        #+END_SRC
 
-    2. Rescue (/note the =.= dot) -- will require interactive input, due to a
-       =sudo= invocation:
+    2. Call for rescue (note the =.= dot) -- will require interactive input, due
+       to a =sudo= invocation (suggestions on how to improve this are welcome!):
 
        #+BEGIN_SRC bash
        [nix-shell:~/src/reflex-glfw]$ . ../nix-install-vendor-gl/nix-install-vendor-gl.sh
-       INFO: The version of the vendor driver in nixpkgs (375.26)
-       doesn't match the system vendor driver version (367.27),
-       so semi-automated vendor GL package download required.
+       INFO: The version of the vendor driver in nixpkgs:  375.26
+       doesn't match the system vendor driver version:     367.27
+       ..so a semi-automated vendor GL package download is required.
 
        downloading ‘http://download.nvidia.com/XFree86/Linux-x86_64/367.27/NVIDIA-Linux-x86_64-367.27.run’... [74251/75142 KiB, 3525.9 KiB/s]
        path is ‘/nix/store/lfp9md7r5ms29wqy99bsayql8sh9fwbw-NVIDIA-Linux-x86_64-367.27.run’
@@ -89,16 +100,15 @@
 
 * Troubleshooting
 
-  Firstly, if anything goes wrong, please:
+  Firstly, there's an =examine= subcommand that dumps /a lot/ of information, that
+  might prove to be useful in case /something goes wrong/.
 
-  1. rerun the failing command with =--verbose=
-  2. file a bug report at https://github.com/deepfire/nix-install-vendor-gl/issues
+  Secondly, still, if anything goes wrong, please:
 
-  Secondly, there's an =examine= subcommand:
-
-  #+BEGIN_QUOTE
-  
-  #+END_QUOTE
+  1. If the script is obviously failing, repeat the failing invocation with =--verbose=.
+  2. File a bug report at
+     https://github.com/deepfire/nix-install-vendor-gl/issues (with the log
+     attached, if #1).
 
 * Why:
 
