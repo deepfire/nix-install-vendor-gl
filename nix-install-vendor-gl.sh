@@ -189,7 +189,7 @@ EOF
 		  fail "Couldn't find nix-provided glxinfo at '${arg_nix_glxinfo}',\nand ${failure} => diagnostics impossible."; }
 
 glxinfo_field() {
-	$1 2>/dev/null | grep "^$2: " | cut -d ':' -f2 | cut -d ' ' -f2-; }
+	$1 2>/dev/null | grep "^$2: " | cut -d ':' -f2 | cut -d ' ' -f2- || true; }
 
 ### query Nix 'glxinfo'
 nix_vendorgl_server_string=`glxinfo_field ${arg_nix_glxinfo} 'server glx vendor string'`
@@ -332,7 +332,7 @@ install-vendor-gl )
 	tmpnix=`mktemp`
 	if test "`NIX_PATH=${NIX_PATH}:nixpkgs-overlays=/tmp/overlay; system_vendorgl_matches_nix_vendorgl`" != 'yes'
 	then
-		warn "The version of the vendor driver in nixpkgs (${nix_vendorgl_driver_version}) doesn't match the system vendor driver version (${system_vendorgl_version}), so an extra step is required: semi-automated vendor GL package download.\n"
+		info "The version of the vendor driver in nixpkgs (${nix_vendorgl_driver_version}) doesn't match the system vendor driver version (${system_vendorgl_version}), so an extra step is required: semi-automated vendor GL package download.\n"
 		nix_vendorgl_package_sha256=`nix-prefetch-url --type sha256 ${nix_vendorgl_package_url}`
 		cat >${tmpnix} <<EOF
 with import <nixpkgs> {};
