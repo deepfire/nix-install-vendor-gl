@@ -186,7 +186,7 @@ EOF
 	  echo -n "[Y/n] ? "
 	  read ans
 	  failure=""
-	  if test "${ans}" = "Y" -o "${ans}" = "y" -o "${ans}" = ""
+	  if test "${ans}" = "Y" || test "${ans}" = "y" || test "${ans}" = ""
 	  then
 		  ${suggested_action}
 		  if test $? != 0
@@ -259,10 +259,10 @@ if test $# -ge 1
 then argnz "OPERATION"; operation=$1; shift
 else operation=${default_operation}; fi
 
-test "${nix_opengl_broken}" = "yes" -o "${operation}" == "examine" || {
+test "${nix_opengl_broken}" = "yes" || test "${operation}" = "examine" || {
 	info "Nix-available GL seems to be okay (according to glxinfo exit status)."
 	return 0; }
-test ! -f ${run_opengl_driver}/lib/libGL.so.1 -o "${operation}" == "examine" ||
+test ! -f ${run_opengl_driver}/lib/libGL.so.1 || test "${operation}" = "examine" ||
 	! (LD_LIBRARY_PATH=${run_opengl_driver}/lib ${arg_nix_glxinfo} >/dev/null 2>&1) || {
 	info "A global libGL.so.1 already seems to be installed at\n${run_opengl_driver}/lib/libGL.so.1, and it appears to be sufficient for\nthe Nix 'glxinfo'.\n\n  export LD_LIBRARY_PATH=${run_opengl_driver}/lib\n"
 	export LD_LIBRARY_PATH=${run_opengl_driver}/lib
