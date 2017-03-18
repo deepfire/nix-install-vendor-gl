@@ -253,7 +253,7 @@ test "${nix_opengl_broken}" = "yes" || {
 	return 0; }
 test ! -f ${run_opengl_driver}/lib/libGL.so.1 ||
 	! (LD_LIBRARY_PATH=${run_opengl_driver}/lib ${arg_nix_glxinfo} >/dev/null 2>&1) || {
-	info "A global libGL.so.1 already seems to be installed at ${run_opengl_driver}/lib/libGL.so.1, and it appears to be sufficient for the Nix 'glxinfo'.\n\n  export LD_LIBRARY_PATH=${run_opengl_driver}/lib\n"
+	info "A global libGL.so.1 already seems to be installed at\n${run_opengl_driver}/lib/libGL.so.1, and it appears to be sufficient for\nthe Nix 'glxinfo'.\n\n  export LD_LIBRARY_PATH=${run_opengl_driver}/lib\n"
 	export LD_LIBRARY_PATH=${run_opengl_driver}/lib
 	return 0; }
 
@@ -332,7 +332,7 @@ install-vendor-gl )
 	tmpnix=`mktemp`
 	if test "`NIX_PATH=${NIX_PATH}:nixpkgs-overlays=/tmp/overlay; system_vendorgl_matches_nix_vendorgl`" != 'yes'
 	then
-		info "The version of the vendor driver in nixpkgs (${nix_vendorgl_driver_version}) doesn't match the system vendor driver version (${system_vendorgl_version}), so an extra step is required: semi-automated vendor GL package download.\n"
+		info "The version of the vendor driver in nixpkgs (${nix_vendorgl_driver_version})\ndoesn't match the system vendor driver version (${system_vendorgl_version}),\nso semi-automated vendor GL package download required.\n"
 		nix_vendorgl_package_sha256=`nix-prefetch-url --type sha256 ${nix_vendorgl_package_url}`
 		cat >${tmpnix} <<EOF
 with import <nixpkgs> {};
@@ -373,3 +373,6 @@ To make them available to Nix-build applications you can now issue:
 EOF
 	export LD_LIBRARY_PATH=${run_opengl_driver}/lib
 	;; esac
+
+## Undo the set -eu.  XXX:  what some of that was set before us?  Ah, SHell programming..
+set +eu
