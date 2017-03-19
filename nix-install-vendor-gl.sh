@@ -52,7 +52,7 @@ EOF
 ###
 default_operation='install-vendor-gl'
 run_opengl_driver='/run/opengl-driver'
-cachedir="${XDG_CACHE_DIR:-${HOME}/.cache}/nix-install-vendor-gl/"
+cachedir="${XDG_CACHE_DIR:-${HOME}/.cache}/nix-install-vendor-gl"
 
 arg_system_glxinfo='/usr/bin/glxinfo'
 arg_nix_glxinfo=${HOME}'/.nix-profile/bin/glxinfo'
@@ -371,6 +371,7 @@ let vendorgl = (${vendorgl_attribute}.override {
         url = "${nix_vendorgl_package_url}";
         sha256 = "${nix_vendorgl_package_sha256}";
       };
+      useGLVND = 0;
     });
 in buildEnv { name = "opengl-drivers"; paths = [ vendorgl ]; }
 EOF
@@ -385,7 +386,10 @@ in buildEnv { name = "opengl-drivers"; paths = [ vendorgl ]; }
 EOF
 	fi
 
-	sudo NIX_PATH=nixpkgs=${arg_nixpkgs} ${nix_build} ${tmpnix} -o ${run_opengl_driver}
+	echo "Installing the vendor driver into: ${run_opengl_driver}"
+	set -x
+	sudo NIX_PATH=nixpkgs=${arg_nixpkgs} ${nix_build} ${tmpnix} -o ${run_opengl_driver} ${arg_verbose:+-v}
+	set +x
 	rm -f ${tmpnix}
 
 	cat <<EOF
