@@ -52,6 +52,7 @@ EOF
 ###
 default_operation='install-vendor-gl'
 run_opengl_driver='/run/opengl-driver'
+cachedir="${XDG_CACHE_DIR:-${HOME}/.cache}/nix-install-vendor-gl/"
 
 arg_system_glxinfo='/usr/bin/glxinfo'
 arg_nix_glxinfo=${HOME}'/.nix-profile/bin/glxinfo'
@@ -353,8 +354,12 @@ install-vendor-gl )
 	tmpnix=`mktemp`
 	if test "`NIX_PATH=${NIX_PATH}:nixpkgs-overlays=/tmp/overlay; system_vendorgl_matches_nix_vendorgl`" != 'yes'
 	then
-		info "The version of the vendor driver in nixpkgs:  ${nix_vendorgl_driver_version}\ndoesn't match the system vendor driver version:     ${system_vendorgl_version}\n..so a semi-automated vendor GL package download is required.\n"
-		nix_vendorgl_package_sha256=`nix-prefetch-url --type sha256 ${nix_vendorgl_package_url}`
+		info "The version of the vendor driver in nixpkgs:  ${nix_vendorgl_driver_version}\ndoesn't match the system vendor driver version:     ${system_vendorgl_version}\n..so a semi-automated vendor GL package installation is required.\n"
+		vendorgl_package_sha256_file="${cachedir}/${system_vendorgl_version}"
+		mkdir -p "${cachedir}"
+		vendorgl_package_sha256_cached="$(test ! -f ${vendorgl_package_sha256_file} || cat ${vendorgl_package_sha256_file})"
+		nix_vendorgl_package_sha256=`nix-prefetch-url --type sha256 ${nix_vendorgl_package_url} ${vendorgl_package_sha256_cached}`
+		echo -n "${nix_vendorgl_package_sha256}" > "${vendorgl_package_sha256_file}"
 		cat >${tmpnix} <<EOF
 with import <nixpkgs> {};
 let vendorgl = (${vendorgl_attribute}.override {
