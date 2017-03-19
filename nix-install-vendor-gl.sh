@@ -170,6 +170,10 @@ test -x "${nix_build}" ||
 test -x "${nix_instantiate}" ||
 	fail "Couldn't find nix-instantiate.  Seems like Nix is not installed:  run $0 --explain"
 
+### Obtain kernel version info
+nix_kernel_version=`nix_eval linuxPackages.kernel.version`
+system_kernel_version=`uname -r | cut -d- -f1`
+
 ### Locate both system and nix glxinfo's
 test -x "${arg_system_glxinfo}" ||
 	fail "Couldn't find system glxinfo executable at '${arg_system_glxinfo}'.  Please provide one via --system-glxinfo"
@@ -327,12 +331,15 @@ examine )
 --------------------------------- General system info:
 $(lsb_release -a 2>&1)
 --------------------------------- System GL:
+System kernel version             ${system_kernel_version}
 System GL vendor string:          ${system_vendorgl_client_string}
 System GL vendor kind:            ${vendorgl}
 System GL vendor driver version:  ${system_vendorgl_version}
+Vendor GL Nix attribute:          ${vendorgl_attribute}
 Vendor GL package URL:            $(nix_vendorgl_package_compute_url)
 Vengor GL Nix package name:       $(nix_vendorgl_package_name)
 --------------------------------- Nix:
+Nix kernel version:               ${nix_kernel_version}
 Nix version:                      $(nix-env --version)
 Nixpkgs:                          ${arg_nixpkgs}
 Nixpkgs ver:                      $(nix_eval lib.nixpkgsVersion)
