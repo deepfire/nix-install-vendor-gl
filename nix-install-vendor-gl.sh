@@ -127,10 +127,11 @@ then has_which=t;     debug "PATH-locator is 'which'";
 elif test `type -P /bin/sh` = "/bin/sh"
 then has_typeP=t;     debug "PATH-locator is 'type -P'"; fi
 resolve_execname() {
+	# Fail lazily -- only when we really need to execute something.
 	if   test ! -z "${has_which}"
-	then which $1
+	then which $1 || true
 	elif test ! -z "${has_typeP}"
-	then type -P $1
+	then type -P $1 || true
 	else fail "Broken system: location of executables by name is too hard."; fi; }
 
 ###
@@ -158,8 +159,15 @@ test -z "${arg_verbose}" || set -x
 ### Pre-main: establish preconditions & precomputations.
 ###
 ### Locate nix and nixpkgs
-      nix_build=`resolve_execname nix-build`
-nix_instantiate=`resolve_execname nix-instantiate`
+
+	   nix_build=`resolve_execname nix-build`
+test -x "${nix_build}" ||
+	fail "Couldn't find nix-build.	Seems like Nix is not installed:  run $0 --explain"
+
+	   nix_instantiate=`resolve_execname nix-instantiate`
+test -x "${nix_instantiate}" ||
+	fail "Couldn't find nix-instantiate.  Seems like Nix is not installed:	run $0 --explain"
+
 if test -z "${arg_nixpkgs}"
 then arg_nixpkgs=`nix-instantiate --find-file nixpkgs`
 fi
@@ -169,10 +177,6 @@ if test -z `nix_eval lib.nixpkgsVersion`
 then fail "the nixpkgs supplied at '${arg_nixpkgs}' fail the sanity check."
 fi
 
-test -x "${nix_build}" ||
-	fail "Couldn't find nix-build.  Seems like Nix is not installed:  run $0 --explain"
-test -x "${nix_instantiate}" ||
-	fail "Couldn't find nix-instantiate.  Seems like Nix is not installed:  run $0 --explain"
 
 ### Obtain kernel version info
 nix_kernel_version=`nix_eval linuxPackages.kernel.version`
