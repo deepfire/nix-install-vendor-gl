@@ -172,11 +172,10 @@ if test -z "${arg_nixpkgs}"
 then arg_nixpkgs=`nix-instantiate --find-file nixpkgs`
 fi
 nix_eval() {
-	NIX_PATH=nixpkgs=${arg_nixpkgs} ${nix_instantiate} --eval --expr "with import <nixpkgs> {}; $1" | sed 's/^"\(.*\)"$/\1/'; }
+	NIX_PATH=nixpkgs=${arg_nixpkgs} ${nix_instantiate} --eval --expr "with import <nixpkgs> { config = { allowUnfree = true; }; }; $1" | sed 's/^"\(.*\)"$/\1/'; }
 if test -z `nix_eval lib.nixpkgsVersion`
 then fail "the nixpkgs supplied at '${arg_nixpkgs}' fail the sanity check."
 fi
-
 
 ### Obtain kernel version info
 nix_kernel_version=`nix_eval linuxPackages.kernel.version`
@@ -368,7 +367,7 @@ install-vendor-gl )
 		nix_vendorgl_package_sha256=`nix-prefetch-url --type sha256 ${nix_vendorgl_package_url} ${vendorgl_package_sha256_cached}`
 		echo -n "${nix_vendorgl_package_sha256}" > "${vendorgl_package_sha256_file}"
 		cat >${tmpnix} <<EOF
-with import <nixpkgs> {};
+with import <nixpkgs> { config = { allowUnfree = true; }; };
 let vendorgl = (${vendorgl_attribute}.override {
       libsOnly = true;
       kernel   = null;
@@ -384,7 +383,7 @@ in buildEnv { name = "opengl-drivers"; paths = [ vendorgl ]; }
 EOF
 	else
 		cat >${tmpnix} <<EOF
-with import <nixpkgs> {};
+with import <nixpkgs> { config = { allowUnfree = true; }; };
 let vendorgl = ${vendorgl_attribute}.override {
       libsOnly = true;
       kernel   = null;
@@ -394,9 +393,10 @@ EOF
 	fi
 
 	echo "Installing the vendor driver into: ${run_opengl_driver}"
-	set -x
-	sudo NIX_PATH=nixpkgs=${arg_nixpkgs} ${nix_build} ${tmpnix} -o ${run_opengl_driver} ${arg_verbose:+-v}
-	set +x
+	nix_build_options='--no-build-output --max-jobs 4 --cores 0'
+	sudo chown ${USER} '/nix' -R
+	     NIX_PATH=nixpkgs=${arg_nixpkgs} ${nix_build} ${nix_build_options} ${tmpnix} ${arg_verbose:+-v}
+	sudo NIX_PATH=nixpkgs=${arg_nixpkgs} ${nix_build} ${nix_build_options} ${tmpnix} ${arg_verbose:+-v} -o ${run_opengl_driver}
 	rm -f ${tmpnix}
 
 	cat <<EOF
