@@ -270,7 +270,15 @@ main() {
 
         ### Locate both system and nix glxinfo's
         test -x "${arg_system_glxinfo}" ||
-	        fail "Couldn't find system glxinfo executable at '${arg_system_glxinfo}'.  Please provide one via --system-glxinfo"
+	        cat <<EOF
+Couldn't find system glxinfo executable at '${arg_system_glxinfo}'.
+Please, either install it:
+
+  Fedora:  dnf install glx-utils
+  Ubuntu:  apt install mesa-utils
+
+..or provide via --system-glxinfo.
+EOF
         test -x "${arg_nix_glxinfo}" ||
 	        { warn "Couldn't find nix-installed glxinfo executable at '${arg_nix_glxinfo}'."
 	          suggested_action="nix-env --no-build-output --install glxinfo"
