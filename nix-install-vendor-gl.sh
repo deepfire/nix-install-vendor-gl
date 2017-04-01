@@ -213,7 +213,7 @@ glxinfo_field() {
 nix_vendorgl_server_string=`glxinfo_field ${arg_nix_glxinfo} 'server glx vendor string'`
 nix_vendorgl_client_string=`glxinfo_field ${arg_nix_glxinfo} 'client glx vendor string'`
  nix_opengl_version_string=`glxinfo_field ${arg_nix_glxinfo} 'OpenGL version string'`
-         nix_opengl_broken=`${arg_nix_glxinfo} >/dev/null 2>&1 && echo no || echo yes`
+	 nix_opengl_broken=`${arg_nix_glxinfo} >/dev/null 2>&1 && echo no || echo yes`
 
 ### query system 'glxinfo'
 system_glxinfo_deplib_path() {
@@ -315,18 +315,18 @@ then fail "Nix vendor GL attribute ${vendorgl_attribute} is wrong, please supply
 fi
 
 system_vendorgl_matches_nix_vendorgl() {
-        test "${system_vendorgl_version}" = ${nix_vendorgl_driver_version} &&
+	test "${system_vendorgl_version}" = ${nix_vendorgl_driver_version} &&
 		echo yes || echo no; }
 
 ### 4. vendor GL package URL
 nix_vendorgl_package_compute_url() {
-        case ${vendorgl} in
+	case ${vendorgl} in
 		nvidia ) echo "http://download.nvidia.com/XFree86/Linux-x86_64/${system_vendorgl_version}/NVIDIA-Linux-x86_64-${system_vendorgl_version}.run";; esac; }
 nix_vendorgl_package_url="`nix_vendorgl_package_compute_url`"
 
 ### 5. vendor GL Nix package name
 nix_vendorgl_package_name() {
-        case ${vendorgl} in
+	case ${vendorgl} in
 		nvidia ) echo "nvidia-x11-${system_vendorgl_version}-\${pkgs.linuxPackages.kernel.version}";; esac; }
 
 ### Main & toplevel command dispatch
@@ -338,21 +338,21 @@ examine )
 --------------------------------- General system info:
 $(lsb_release -a 2>&1)
 --------------------------------- System GL:
-System kernel version             ${system_kernel_version}
-System GL vendor string:          ${system_vendorgl_client_string}
-System GL vendor kind:            ${vendorgl}
+System kernel version		  ${system_kernel_version}
+System GL vendor string:	  ${system_vendorgl_client_string}
+System GL vendor kind:		  ${vendorgl}
 System GL vendor driver version:  ${system_vendorgl_version}
-Vendor GL Nix attribute:          ${vendorgl_attribute}
-Vendor GL package URL:            $(nix_vendorgl_package_compute_url)
-Vengor GL Nix package name:       $(nix_vendorgl_package_name)
+Vendor GL Nix attribute:	  ${vendorgl_attribute}
+Vendor GL package URL:		  $(nix_vendorgl_package_compute_url)
+Vengor GL Nix package name:	  $(nix_vendorgl_package_name)
 --------------------------------- Nix:
-Nix kernel version:               ${nix_kernel_version}
-Nix version:                      $(nix-env --version)
-Nixpkgs:                          ${arg_nixpkgs}
-Nixpkgs ver:                      $(nix_eval lib.nixpkgsVersion)
-Nix GL vendor driver version:     ${nix_vendorgl_driver_version}
+Nix kernel version:		  ${nix_kernel_version}
+Nix version:			  $(nix-env --version)
+Nixpkgs:			  ${arg_nixpkgs}
+Nixpkgs ver:			  $(nix_eval lib.nixpkgsVersion)
+Nix GL vendor driver version:	  ${nix_vendorgl_driver_version}
 ---------------------------------
-Sys vendor GL = Nix vendor GL:    $(system_vendorgl_matches_nix_vendorgl)
+Sys vendor GL = Nix vendor GL:	  $(system_vendorgl_matches_nix_vendorgl)
 EOF
 	;;
 
@@ -360,7 +360,7 @@ install-vendor-gl )
 	tmpnix=`mktemp`
 	if test "`NIX_PATH=${NIX_PATH}:nixpkgs-overlays=/tmp/overlay; system_vendorgl_matches_nix_vendorgl`" != 'yes'
 	then
-		info "The version of the vendor driver in nixpkgs:  ${nix_vendorgl_driver_version}\ndoesn't match the system vendor driver version:     ${system_vendorgl_version}\n..so a semi-automated vendor GL package installation is required.\n"
+		info "The version of the vendor driver in nixpkgs:  ${nix_vendorgl_driver_version}\ndoesn't match the system vendor driver version:	${system_vendorgl_version}\n..so a semi-automated vendor GL package installation is required.\n"
 		vendorgl_package_sha256_file="${cachedir}/${system_vendorgl_version}"
 		mkdir -p "${cachedir}"
 		vendorgl_package_sha256_cached="$(test ! -f ${vendorgl_package_sha256_file} || cat ${vendorgl_package_sha256_file})"
@@ -374,8 +374,8 @@ let vendorgl = (${vendorgl_attribute}.override {
     }).overrideAttrs (oldAttrs: rec {
       name = "$(nix_vendorgl_package_name)";
       src = fetchurl {
-        url = "${nix_vendorgl_package_url}";
-        sha256 = "${nix_vendorgl_package_sha256}";
+	url = "${nix_vendorgl_package_url}";
+	sha256 = "${nix_vendorgl_package_sha256}";
       };
       useGLVND = 0;
     });
