@@ -97,6 +97,9 @@ usage() {
 
 EOF
 }
+DEBUG=
+debug() {
+    if test "${DEBUG}"; then echo "$*" >&2; fi; }
 info() {
     ${echoe} "INFO: $*" >&2; }
 warn() {
@@ -115,14 +118,14 @@ alias argnzf='test $# -ge 1 -a -f "$1" || usage "missing file for"'
 ## Portability:
 ##
 if test -z "${BASH_VERSION}"
-then echoe='echo'
-else echoe='echo -e'; fi
+then echoe='echo';    debug "escape-aware echo is 'echo'";
+else echoe='echo -e'; debug "escape-aware echo is 'echo -e'"; fi
 has_which=
 has_typeP=
 if test `which /bin/sh` = "/bin/sh"
-then has_which=t
+then has_which=t;     debug "PATH-locator is 'which'";
 elif test `type -P /bin/sh` = "/bin/sh"
-then has_typeP=t; fi
+then has_typeP=t;     debug "PATH-locator is 'type -P'"; fi
 resolve_execname() {
 	if   test ! -z "${has_which}"
 	then which $1
