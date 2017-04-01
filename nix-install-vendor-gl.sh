@@ -136,7 +136,8 @@ resolve_execname() {
 
 ###
 ###
-set -ue ## Undefined hardcore. 2017 programming at its best.
+set -u -e ## Undefined hardcore. 2017 programming at its best.
+
 while test $# -ge 1
 do
     case "$1"
@@ -156,79 +157,17 @@ do
     shift; done
 test -z "${arg_verbose}" || set -x
 
-### Pre-main: establish preconditions & precomputations.
-###
-### Locate nix and nixpkgs
-
-	   nix_build=`resolve_execname nix-build`
-test -x "${nix_build}" ||
-	fail "Couldn't find nix-build.	Seems like Nix is not installed:  run $0 --explain"
-
-	   nix_instantiate=`resolve_execname nix-instantiate`
-test -x "${nix_instantiate}" ||
-	fail "Couldn't find nix-instantiate.  Seems like Nix is not installed:	run $0 --explain"
-
-if test -z "${arg_nixpkgs}"
-then arg_nixpkgs=`nix-instantiate --find-file nixpkgs`
-fi
 nix_eval() {
 	NIX_PATH=nixpkgs=${arg_nixpkgs} ${nix_instantiate} --eval --expr "with import <nixpkgs> { config = { allowUnfree = true; }; }; $1" | sed 's/^"\(.*\)"$/\1/'; }
-if test -z `nix_eval lib.nixpkgsVersion`
-then fail "the nixpkgs supplied at '${arg_nixpkgs}' fail the sanity check."
-fi
-
-### Obtain kernel version info
-nix_kernel_version=`nix_eval linuxPackages.kernel.version`
-system_kernel_version=`uname -r | cut -d- -f1`
-
-### Locate both system and nix glxinfo's
-test -x "${arg_system_glxinfo}" ||
-	fail "Couldn't find system glxinfo executable at '${arg_system_glxinfo}'.  Please provide one via --system-glxinfo"
-test -x "${arg_nix_glxinfo}" ||
-	{ warn "Couldn't find nix-installed glxinfo executable at '${arg_nix_glxinfo}'."
-	  suggested_action="nix-env --no-build-output --install glxinfo"
-	  cat <<EOF
-I suggest we install one now, using '${suggested_action}'.
-
-That's what we're gonna run, together, if you agree.
-
-This is a great decision -- of course -- the choice is yours.
-EOF
-	  echo -n "[Y/n] ? "
-	  read ans
-	  failure=""
-	  if test "${ans}" = "Y" || test "${ans}" = "y" || test "${ans}" = ""
-	  then
-		  ${suggested_action}
-		  if test $? != 0
-		  then failure="the script failed an attempt to fix that with execution of '${suggested_action}'"; fi
-	  else failure="the user refused to install it"; fi
-	  test -z "${failure}" ||
-		  fail "Couldn't find nix-provided glxinfo at '${arg_nix_glxinfo}',\nand ${failure} => diagnostics impossible."; }
 
 glxinfo_field() {
 	$1 2>/dev/null | grep "^$2: "     | cut -d ':' -f2 | cut -d ' ' -f2- || true; }
 glxinfo_query_renderer_field() {
 	$1 2>/dev/null | grep "^    $2: " | cut -d ':' -f2 | cut -d ' ' -f2- || true; }
 
-### query Nix 'glxinfo'
- nix_mesagl_vendor=`glxinfo_query_renderer_field ${arg_system_glxinfo} 'Vendor'  | cut -d' ' -f1`
- nix_mesagl_device=`glxinfo_query_renderer_field ${arg_system_glxinfo} 'Device'  | cut -d' ' -f1`
-nix_mesagl_version=`glxinfo_query_renderer_field ${arg_system_glxinfo} 'Version' | cut -d' ' -f1`
-
-nix_vendorgl_server_string=`glxinfo_field ${arg_nix_glxinfo} 'server glx vendor string'`
-nix_vendorgl_client_string=`glxinfo_field ${arg_nix_glxinfo} 'client glx vendor string'`
- nix_opengl_version_string=`glxinfo_field ${arg_nix_glxinfo} 'OpenGL version string'`
-	 nix_opengl_broken=`${arg_nix_glxinfo} >/dev/null 2>&1 && echo no || echo yes`
-
-### query system 'glxinfo'
 system_glxinfo_deplib_path() {
 	ldd ${arg_system_glxinfo} | grep "^[[:space:]]*$1 => " | cut -d ' ' -f3; }
-   system_vendorgl_server_string=`glxinfo_field ${arg_system_glxinfo} 'server glx vendor string'`
-   system_vendorgl_client_string=`glxinfo_field ${arg_system_glxinfo} 'client glx vendor string'`
-  system_vendorgl_version_string=`glxinfo_field ${arg_system_glxinfo} 'OpenGL version string'`
-              system_libgl1_path=`system_glxinfo_deplib_path 'libGL.so.1'`
-          system_vendorgl_broken=`${arg_system_glxinfo} >/dev/null 2>&1 && echo no || echo yes`
+
 compute_system_vendorgl_kind() {
     if test "${nix_mesagl_vendor}" = "X.Org"
     then case "${nix_mesagl_device}" in
@@ -239,14 +178,44 @@ compute_system_vendorgl_kind() {
 	     'AMD Corporation' )    echo 'amd';;
 	     'Intel Corporation' )  echo 'intel';;
 	     * )                    echo 'unknown';; esac; fi; }
-            system_vendorgl_kind=`compute_system_vendorgl_kind`
+
+validate_system_vendorgl_kind() {
+        case ${vendorgl} in
+                nvidia ) true;;
+                * )      fail "unsupported GL vendor: ${vendorgl} (vendor string '${system_vendorgl_client_string}')";; esac
+}
+
 compute_system_vendorgl_version() {
     case $system_vendorgl_kind in
 	amd-mesa ) echo ${nix_mesagl_version};;
 	nvidia   ) echo ${system_vendorgl_version_string} | cut -d ' ' -f3;; esac; }
-         system_vendorgl_version=`compute_system_vendorgl_version`
 
-dump() {
+nix_vendorgl_attribute() {
+	if test ! -z "${arg_nix_vendorgl_attr}"
+	then vendorgl_attribute=${arg_nix_vendorgl_attr}
+	else case ${vendorgl} in
+		     nvidia ) echo 'linuxPackages.nvidia_x11';; esac; fi; }
+
+nix_vendorgl_version_get_attribute_name() {
+        case ${vendorgl} in
+		nvidia ) echo 'if builtins.hasAttr "version" '${vendorgl_attribute}' then '${vendorgl_attribute}'.version else '${vendorgl_attribute}'.versionNumber';; esac; }
+
+nix_vendorgl_get_driver_version() {
+	nix_eval "`nix_vendorgl_version_get_attribute_name`"; }
+
+system_vendorgl_matches_nix_vendorgl() {
+	test "${system_vendorgl_version}" = ${nix_vendorgl_driver_version} &&
+		echo yes || echo no; }
+
+nix_vendorgl_package_compute_url() {
+	case ${vendorgl} in
+		nvidia ) echo "http://download.nvidia.com/XFree86/Linux-x86_64/${system_vendorgl_version}/NVIDIA-Linux-x86_64-${system_vendorgl_version}.run";; esac; }
+
+nix_vendorgl_package_name() {
+	case ${vendorgl} in
+		nvidia ) echo "nvidia-x11-${system_vendorgl_version}-\${pkgs.linuxPackages.kernel.version}";; esac; }
+
+dump_internal_vars() {
      cat <<EOF
 --------------------------------- Dumping internal variables:
 nix-build:                        ${nix_build}
@@ -274,82 +243,121 @@ Default Nix GL version:           ${nix_opengl_version_string}
 Default Nix GL broken:            ${nix_opengl_broken}
 EOF
 }
-if test ! -z "${arg_verbose}${arg_dump_and_exit}"
-then dump
-     if test ! -z "${arg_dump_and_exit}"
-     then return 0; fi; fi
 
-### Main functionality.
-###
-if test $# -ge 1
-then argnz "OPERATION"; operation=$1; shift
-else operation=${default_operation}; fi
+main() {
+        ### Establish preconditions & precomputations.
+        ###
+        ### Locate nix and nixpkgs
 
-test "${nix_opengl_broken}" = "yes" || test "${operation}" = "examine" || {
-	info "Nix-available GL seems to be okay (according to glxinfo exit status)."
-	return 0; }
-test ! -f ${run_opengl_driver}/lib/libGL.so.1 || test "${operation}" = "examine" ||
-	! (LD_LIBRARY_PATH=${run_opengl_driver}/lib ${arg_nix_glxinfo} >/dev/null 2>&1) || {
-	info "A global libGL.so.1 already seems to be installed at\n${run_opengl_driver}/lib/libGL.so.1, and it appears to be sufficient for\nthe Nix 'glxinfo'.\n\n  export LD_LIBRARY_PATH=${run_opengl_driver}/lib\n"
-	export LD_LIBRARY_PATH=${run_opengl_driver}/lib
-	return 0; }
+	nix_build=`resolve_execname nix-build`
+        test -x "${nix_build}" ||
+	        fail "Couldn't find nix-build.	Seems like Nix is not installed:  run $0 --explain"
 
-test "${system_vendorgl_broken}" = "no" || {
-	${arg_system_glxinfo}
-	fail "System-wide GL appear to be broken (according to glxinfo exit status),\nnot much can be done."; }
-# test -f "${system_libgl1_path}" ||
-# 	fail "Couldn't find system libGL.so.1.  Please, report a bug."
+	nix_instantiate=`resolve_execname nix-instantiate`
+        test -x "${nix_instantiate}" ||
+	        fail "Couldn't find nix-instantiate.  Seems like Nix is not installed:	run $0 --explain"
 
-vendorgl=`compute_system_vendorgl_kind`
-case ${vendorgl} in
-       nvidia ) true;;
-       * )      fail "unsupported GL vendor: ${vendorgl} (vendor string '${system_vendorgl_client_string}')";; esac
+        if test -z "${arg_nixpkgs}"
+        then arg_nixpkgs=`nix-instantiate --find-file nixpkgs`
+        fi
+        if test -z `nix_eval lib.nixpkgsVersion`
+        then fail "the nixpkgs supplied at '${arg_nixpkgs}' fail the sanity check."
+        fi
 
-##
-## The rest of code assumes valid values of ${vendorgl}.
-##
-### 1. vendor-specific derivation attribute
-nix_vendorgl_attribute() {
-	if test ! -z "${arg_nix_vendorgl_attr}"
-	then vendorgl_attribute=${arg_nix_vendorgl_attr}
-	else case ${vendorgl} in
-		     nvidia ) echo 'linuxPackages.nvidia_x11';; esac; fi; }
-vendorgl_attribute=`nix_vendorgl_attribute`
+        ### Obtain kernel version info
+        nix_kernel_version=`nix_eval linuxPackages.kernel.version`
+        system_kernel_version=`uname -r | cut -d- -f1`
 
-### 2. vendor-specific version attribute
-nix_vendorgl_version_get_attribute_name() {
-        case ${vendorgl} in
-		nvidia ) echo 'if builtins.hasAttr "version" '${vendorgl_attribute}' then '${vendorgl_attribute}'.version else '${vendorgl_attribute}'.versionNumber';; esac; }
+        ### Locate both system and nix glxinfo's
+        test -x "${arg_system_glxinfo}" ||
+	        fail "Couldn't find system glxinfo executable at '${arg_system_glxinfo}'.  Please provide one via --system-glxinfo"
+        test -x "${arg_nix_glxinfo}" ||
+	        { warn "Couldn't find nix-installed glxinfo executable at '${arg_nix_glxinfo}'."
+	          suggested_action="nix-env --no-build-output --install glxinfo"
+	          cat <<EOF
+I suggest we install one now, using '${suggested_action}'.
 
-### 3. vendor GL version
-nix_vendorgl_get_driver_version() {
-	nix_eval "`nix_vendorgl_version_get_attribute_name`"; }
-nix_vendorgl_driver_version=`nix_vendorgl_get_driver_version`
-if test -z "${nix_vendorgl_driver_version}"
-then fail "Nix vendor GL attribute ${vendorgl_attribute} is wrong, please supply a better one using --nix-vendor-gl-attr"
-fi
+That's what we're gonna run, together, if you agree.
 
-system_vendorgl_matches_nix_vendorgl() {
-	test "${system_vendorgl_version}" = ${nix_vendorgl_driver_version} &&
-		echo yes || echo no; }
+This is a great decision -- of course -- the choice is yours.
+EOF
+	          echo -n "[Y/n] ? "
+	          read ans
+	          failure=""
+	          if test "${ans}" = "Y" || test "${ans}" = "y" || test "${ans}" = ""
+	          then
+		          ${suggested_action}
+		          if test $? != 0
+		          then failure="the script failed an attempt to fix that with execution of '${suggested_action}'"; fi
+	          else failure="the user refused to install it"; fi
+	          test -z "${failure}" ||
+		          fail "Couldn't find nix-provided glxinfo at '${arg_nix_glxinfo}',\nand ${failure} => diagnostics impossible."; }
 
-### 4. vendor GL package URL
-nix_vendorgl_package_compute_url() {
-	case ${vendorgl} in
-		nvidia ) echo "http://download.nvidia.com/XFree86/Linux-x86_64/${system_vendorgl_version}/NVIDIA-Linux-x86_64-${system_vendorgl_version}.run";; esac; }
-nix_vendorgl_package_url="`nix_vendorgl_package_compute_url`"
+        ### query Nix 'glxinfo'
+        nix_mesagl_vendor=`glxinfo_query_renderer_field ${arg_system_glxinfo} 'Vendor'  | cut -d' ' -f1`
+        nix_mesagl_device=`glxinfo_query_renderer_field ${arg_system_glxinfo} 'Device'  | cut -d' ' -f1`
+        nix_mesagl_version=`glxinfo_query_renderer_field ${arg_system_glxinfo} 'Version' | cut -d' ' -f1`
 
-### 5. vendor GL Nix package name
-nix_vendorgl_package_name() {
-	case ${vendorgl} in
-		nvidia ) echo "nvidia-x11-${system_vendorgl_version}-\${pkgs.linuxPackages.kernel.version}";; esac; }
+        nix_vendorgl_server_string=`glxinfo_field ${arg_nix_glxinfo} 'server glx vendor string'`
+        nix_vendorgl_client_string=`glxinfo_field ${arg_nix_glxinfo} 'client glx vendor string'`
+        nix_opengl_version_string=`glxinfo_field ${arg_nix_glxinfo} 'OpenGL version string'`
+	nix_opengl_broken=`${arg_nix_glxinfo} >/dev/null 2>&1 && echo no || echo yes`
 
-### Main & toplevel command dispatch
-###
-case ${operation} in
-examine )
-	dump
-	cat <<EOF
+        ### query system 'glxinfo'
+        system_vendorgl_server_string=`glxinfo_field ${arg_system_glxinfo} 'server glx vendor string'`
+        system_vendorgl_client_string=`glxinfo_field ${arg_system_glxinfo} 'client glx vendor string'`
+        system_vendorgl_version_string=`glxinfo_field ${arg_system_glxinfo} 'OpenGL version string'`
+        system_libgl1_path=`system_glxinfo_deplib_path 'libGL.so.1'`
+        system_vendorgl_broken=`${arg_system_glxinfo} >/dev/null 2>&1 && echo no || echo yes`
+        system_vendorgl_kind=`compute_system_vendorgl_kind`
+        system_vendorgl_version=`compute_system_vendorgl_version`
+
+        if test ! -z "${arg_verbose}${arg_dump_and_exit}"
+        then dump_internal_vars
+             if test ! -z "${arg_dump_and_exit}"
+             then return 0; fi; fi
+
+        ### Main functionality.
+        ###
+        if test $# -ge 1
+        then argnz "OPERATION"; operation=$1; shift
+        else operation=${default_operation}; fi
+
+        test "${nix_opengl_broken}" = "yes" || test "${operation}" = "examine" || {
+	                info "Nix-available GL seems to be okay (according to glxinfo exit status)."
+	                return 0; }
+        test ! -f ${run_opengl_driver}/lib/libGL.so.1 || test "${operation}" = "examine" ||
+	        ! (LD_LIBRARY_PATH=${run_opengl_driver}/lib ${arg_nix_glxinfo} >/dev/null 2>&1) || {
+	                info "A global libGL.so.1 already seems to be installed at\n${run_opengl_driver}/lib/libGL.so.1, and it appears to be sufficient for\nthe Nix 'glxinfo'.\n\n  export LD_LIBRARY_PATH=${run_opengl_driver}/lib\n"
+	                export LD_LIBRARY_PATH=${run_opengl_driver}/lib
+	                return 0; }
+
+        test "${system_vendorgl_broken}" = "no" || {
+	        ${arg_system_glxinfo}
+	        fail "System-wide GL appear to be broken (according to glxinfo exit status),\nnot much can be done."; }
+
+        vendorgl=`compute_system_vendorgl_kind`
+
+        validate_system_vendorgl_kind
+
+        ## The rest of code assumes valid values of ${vendorgl}.
+        ##
+        vendorgl_attribute=`nix_vendorgl_attribute`
+
+        nix_vendorgl_driver_version=`nix_vendorgl_get_driver_version`
+        if test -z "${nix_vendorgl_driver_version}"
+        then fail "Nix vendor GL attribute ${vendorgl_attribute} is wrong, please supply a better one using --nix-vendor-gl-attr"
+        fi
+
+        nix_vendorgl_package_url="`nix_vendorgl_package_compute_url`"
+
+
+        ### Main & toplevel command dispatch
+        ###
+        case ${operation} in
+        examine )
+	        dump_internal_vars
+	        cat <<EOF
 --------------------------------- General system info:
 $(lsb_release -a 2>&1)
 --------------------------------- System GL:
@@ -369,19 +377,19 @@ Nix GL vendor driver version:	  ${nix_vendorgl_driver_version}
 ---------------------------------
 Sys vendor GL = Nix vendor GL:	  $(system_vendorgl_matches_nix_vendorgl)
 EOF
-	;;
+	        ;;
 
-install-vendor-gl )
-	tmpnix=`mktemp`
-	if test "`NIX_PATH=${NIX_PATH}:nixpkgs-overlays=/tmp/overlay; system_vendorgl_matches_nix_vendorgl`" != 'yes'
-	then
-		info "The version of the vendor driver in nixpkgs:  ${nix_vendorgl_driver_version}\ndoesn't match the system vendor driver version:	${system_vendorgl_version}\n..so a semi-automated vendor GL package installation is required.\n"
-		vendorgl_package_sha256_file="${cachedir}/${system_vendorgl_version}"
-		mkdir -p "${cachedir}"
-		vendorgl_package_sha256_cached="$(test ! -f ${vendorgl_package_sha256_file} || cat ${vendorgl_package_sha256_file})"
-		nix_vendorgl_package_sha256=`nix-prefetch-url --type sha256 ${nix_vendorgl_package_url} ${vendorgl_package_sha256_cached}`
-		echo -n "${nix_vendorgl_package_sha256}" > "${vendorgl_package_sha256_file}"
-		cat >${tmpnix} <<EOF
+        install-vendor-gl )
+	        tmpnix=`mktemp`
+	        if test "`NIX_PATH=${NIX_PATH}:nixpkgs-overlays=/tmp/overlay; system_vendorgl_matches_nix_vendorgl`" != 'yes'
+	        then
+	                info "The version of the vendor driver in nixpkgs:  ${nix_vendorgl_driver_version}\ndoesn't match the system vendor driver version:	${system_vendorgl_version}\n..so a semi-automated vendor GL package installation is required.\n"
+	                vendorgl_package_sha256_file="${cachedir}/${system_vendorgl_version}"
+	                mkdir -p "${cachedir}"
+	                vendorgl_package_sha256_cached="$(test ! -f ${vendorgl_package_sha256_file} || cat ${vendorgl_package_sha256_file})"
+	                nix_vendorgl_package_sha256=`nix-prefetch-url --type sha256 ${nix_vendorgl_package_url} ${vendorgl_package_sha256_cached}`
+	                echo -n "${nix_vendorgl_package_sha256}" > "${vendorgl_package_sha256_file}"
+	                cat >${tmpnix} <<EOF
 with import <nixpkgs> { config = { allowUnfree = true; }; };
 let vendorgl = (${vendorgl_attribute}.override {
       libsOnly = true;
@@ -396,8 +404,8 @@ let vendorgl = (${vendorgl_attribute}.override {
     });
 in buildEnv { name = "opengl-drivers"; paths = [ vendorgl ]; }
 EOF
-	else
-		cat >${tmpnix} <<EOF
+	        else
+		        cat >${tmpnix} <<EOF
 with import <nixpkgs> { config = { allowUnfree = true; }; };
 let vendorgl = ${vendorgl_attribute}.override {
       libsOnly = true;
@@ -405,16 +413,15 @@ let vendorgl = ${vendorgl_attribute}.override {
     };
 in buildEnv { name = "opengl-drivers"; paths = [ vendorgl ]; }
 EOF
-	fi
+	        fi
 
-	echo "Installing the vendor driver into: ${run_opengl_driver}"
-	nix_build_options='--no-build-output --max-jobs 4 --cores 0'
-	sudo chown ${USER} '/nix' -R
-	     NIX_PATH=nixpkgs=${arg_nixpkgs} ${nix_build} ${nix_build_options} ${tmpnix} ${arg_verbose:+-v}
-	sudo NIX_PATH=nixpkgs=${arg_nixpkgs} ${nix_build} ${nix_build_options} ${tmpnix} ${arg_verbose:+-v} -o ${run_opengl_driver}
-	rm -f ${tmpnix}
+	        echo "Installing the vendor driver into: ${run_opengl_driver}"
+	        nix_build_options='--no-build-output --max-jobs 4 --cores 0'
+	        NIX_PATH=nixpkgs=${arg_nixpkgs} ${nix_build} ${nix_build_options} ${tmpnix} ${arg_verbose:+-v}
+	        sudo NIX_PATH=nixpkgs=${arg_nixpkgs} ${nix_build} ${nix_build_options} ${tmpnix} ${arg_verbose:+-v} -o ${run_opengl_driver}
+	        rm -f ${tmpnix}
 
-	cat <<EOF
+	        cat <<EOF
 Nix-compatible vendor GL driver is now installed at ${run_opengl_driver}
 
 To make them available to Nix-build applications you can now issue:
@@ -423,8 +430,8 @@ To make them available to Nix-build applications you can now issue:
 
 (Doing the export, in case you have sourced the file directly.)
 EOF
-	export LD_LIBRARY_PATH=${run_opengl_driver}/lib
-	;; esac
+	        export LD_LIBRARY_PATH=${run_opengl_driver}/lib;; esac
+}
 
-## Undo the set -eu.  XXX:  what some of that was set before us?  Ah, SHell programming..
-set +eu
+main "$@"
+set +e +u
