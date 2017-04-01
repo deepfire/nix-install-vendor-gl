@@ -207,9 +207,15 @@ EOF
 		  fail "Couldn't find nix-provided glxinfo at '${arg_nix_glxinfo}',\nand ${failure} => diagnostics impossible."; }
 
 glxinfo_field() {
-	$1 2>/dev/null | grep "^$2: " | cut -d ':' -f2 | cut -d ' ' -f2- || true; }
+	$1 2>/dev/null | grep "^$2: "     | cut -d ':' -f2 | cut -d ' ' -f2- || true; }
+glxinfo_query_renderer_field() {
+	$1 2>/dev/null | grep "^    $2: " | cut -d ':' -f2 | cut -d ' ' -f2- || true; }
 
 ### query Nix 'glxinfo'
+ nix_mesagl_vendor=`glxinfo_query_renderer_field ${arg_system_glxinfo} 'Vendor'  | cut -d' ' -f1`
+ nix_mesagl_device=`glxinfo_query_renderer_field ${arg_system_glxinfo} 'Device'  | cut -d' ' -f1`
+nix_mesagl_version=`glxinfo_query_renderer_field ${arg_system_glxinfo} 'Version' | cut -d' ' -f1`
+
 nix_vendorgl_server_string=`glxinfo_field ${arg_nix_glxinfo} 'server glx vendor string'`
 nix_vendorgl_client_string=`glxinfo_field ${arg_nix_glxinfo} 'client glx vendor string'`
  nix_opengl_version_string=`glxinfo_field ${arg_nix_glxinfo} 'OpenGL version string'`
@@ -224,16 +230,21 @@ system_glxinfo_deplib_path() {
               system_libgl1_path=`system_glxinfo_deplib_path 'libGL.so.1'`
           system_vendorgl_broken=`${arg_system_glxinfo} >/dev/null 2>&1 && echo no || echo yes`
 compute_system_vendorgl_kind() {
-	case "${system_vendorgl_client_string}" in
-	     "NVIDIA Corporation" ) echo "nvidia";;
-	     "AMD Corporation" )    echo "amd";;
-	     "Intel Corporation" )  echo "intel";;
-	     "*" )                  echo "unknown";; esac; }
-          system_vendorgl_kind=`compute_system_vendorgl_kind`
-   compute_system_vendorgl_version() {
-	   case $system_vendorgl_kind in
-		   nvidia ) echo ${system_vendorgl_version_string} | cut -d ' ' -f3;; esac; }
-       system_vendorgl_version=`compute_system_vendorgl_version`
+    if test "${nix_mesagl_vendor}" = "X.Org"
+    then case "${nix_mesagl_device}" in
+	     'AMD' )                echo 'amd-mesa';;
+	     * )                    echo 'unknown';; esac
+    else case "${system_vendorgl_client_string}" in
+	     'NVIDIA Corporation' ) echo 'nvidia';;
+	     'AMD Corporation' )    echo 'amd';;
+	     'Intel Corporation' )  echo 'intel';;
+	     * )                    echo 'unknown';; esac; fi; }
+            system_vendorgl_kind=`compute_system_vendorgl_kind`
+compute_system_vendorgl_version() {
+    case $system_vendorgl_kind in
+	amd-mesa ) echo ${nix_mesagl_version};;
+	nvidia   ) echo ${system_vendorgl_version_string} | cut -d ' ' -f3;; esac; }
+         system_vendorgl_version=`compute_system_vendorgl_version`
 
 dump() {
      cat <<EOF
@@ -242,6 +253,10 @@ nix-build:                        ${nix_build}
 arg_nixpkgs:                      ${arg_nixpkgs}
 arg_system_glxinfo:               ${arg_system_glxinfo}
 arg_nix_glxinfo:                  ${arg_nix_glxinfo}
+
+MESA_query_renderer vendor:       ${nix_mesagl_vendor}
+MESA_query_renderer device:       ${nix_mesagl_device}
+MESA_query_renderer drv version:  ${nix_mesagl_version}
 
 server GLX vendor:                ${system_vendorgl_server_string}
 client GLX vendor:                ${system_vendorgl_client_string}
