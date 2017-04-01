@@ -168,6 +168,9 @@ glxinfo_query_renderer_field() {
 system_glxinfo_deplib_path() {
 	ldd ${arg_system_glxinfo} | grep "^[[:space:]]*$1 => " | cut -d ' ' -f3; }
 
+###
+### The aspiring GPU driver portability layer
+###
 compute_system_vendorgl_kind() {
     if test "${nix_mesagl_vendor}" = "X.Org"
     then case "${nix_mesagl_device}" in
@@ -186,9 +189,9 @@ validate_system_vendorgl_kind() {
 }
 
 compute_system_vendorgl_version() {
-    case $system_vendorgl_kind in
-	amd-mesa ) echo ${nix_mesagl_version};;
-	nvidia   ) echo ${system_vendorgl_version_string} | cut -d ' ' -f3;; esac; }
+        case ${vendorgl} in
+	        amd-mesa ) echo ${nix_mesagl_version};;
+	        nvidia   ) echo ${system_vendorgl_version_string} | cut -d ' ' -f3;; esac; }
 
 nix_vendorgl_attribute() {
 	if test ! -z "${arg_nix_vendorgl_attr}"
@@ -200,13 +203,6 @@ nix_vendorgl_version_get_attribute_name() {
         case ${vendorgl} in
 		nvidia ) echo 'if builtins.hasAttr "version" '${vendorgl_attribute}' then '${vendorgl_attribute}'.version else '${vendorgl_attribute}'.versionNumber';; esac; }
 
-nix_vendorgl_get_driver_version() {
-	nix_eval "`nix_vendorgl_version_get_attribute_name`"; }
-
-system_vendorgl_matches_nix_vendorgl() {
-	test "${system_vendorgl_version}" = ${nix_vendorgl_driver_version} &&
-		echo yes || echo no; }
-
 nix_vendorgl_package_compute_url() {
 	case ${vendorgl} in
 		nvidia ) echo "http://download.nvidia.com/XFree86/Linux-x86_64/${system_vendorgl_version}/NVIDIA-Linux-x86_64-${system_vendorgl_version}.run";; esac; }
@@ -214,6 +210,15 @@ nix_vendorgl_package_compute_url() {
 nix_vendorgl_package_name() {
 	case ${vendorgl} in
 		nvidia ) echo "nvidia-x11-${system_vendorgl_version}-\${pkgs.linuxPackages.kernel.version}";; esac; }
+
+###
+###
+nix_vendorgl_get_driver_version() {
+	nix_eval "`nix_vendorgl_version_get_attribute_name`"; }
+
+system_vendorgl_matches_nix_vendorgl() {
+	test "${system_vendorgl_version}" = ${nix_vendorgl_driver_version} &&
+		echo yes || echo no; }
 
 dump_internal_vars() {
      cat <<EOF
@@ -317,7 +322,7 @@ EOF
         system_vendorgl_version_string=`glxinfo_field ${arg_system_glxinfo} 'OpenGL version string'`
         system_libgl1_path=`system_glxinfo_deplib_path 'libGL.so.1'`
         system_vendorgl_broken=`${arg_system_glxinfo} >/dev/null 2>&1 && echo no || echo yes`
-        system_vendorgl_kind=`compute_system_vendorgl_kind`
+        vendorgl=`compute_system_vendorgl_kind`
         system_vendorgl_version=`compute_system_vendorgl_version`
 
         if test ! -z "${arg_verbose}${arg_dump_and_exit}"
@@ -343,8 +348,6 @@ EOF
         test "${system_vendorgl_broken}" = "no" || {
 	        ${arg_system_glxinfo}
 	        fail "System-wide GL appear to be broken (according to glxinfo exit status),\nnot much can be done."; }
-
-        vendorgl=`compute_system_vendorgl_kind`
 
         validate_system_vendorgl_kind
 
@@ -391,7 +394,7 @@ EOF
 	        tmpnix=`mktemp`
 	        if test "`NIX_PATH=${NIX_PATH}:nixpkgs-overlays=/tmp/overlay; system_vendorgl_matches_nix_vendorgl`" != 'yes'
 	        then
-	                info "The version of the vendor driver in nixpkgs:  ${nix_vendorgl_driver_version}\ndoesn't match the system vendor driver version:	${system_vendorgl_version}\n..so a semi-automated vendor GL package installation is required.\n"
+	                info "The version of the vendor driver in nixpkgs:  ${nix_vendorgl_driver_version}\ndoesn't match the system vendor driver version:     ${system_vendorgl_version}\n..so a semi-automated vendor GL package installation is required.\n"
 	                vendorgl_package_sha256_file="${cachedir}/${system_vendorgl_version}"
 	                mkdir -p "${cachedir}"
 	                vendorgl_package_sha256_cached="$(test ! -f ${vendorgl_package_sha256_file} || cat ${vendorgl_package_sha256_file})"
