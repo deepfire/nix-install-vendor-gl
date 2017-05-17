@@ -14,6 +14,13 @@
     amount to extending case statements in a number of functions -- the list is
     here: https://github.com/deepfire/nix-install-vendor-gl/blob/master/nix-install-vendor-gl.sh#L7
 
+*** OS/GPU test matrix
+
+    |              | nVidia/nvidia | nVidia/nouveau | AMD/AMDGPU-PRO | AMD/radeonsi | Intel |
+    |--------------+---------------+----------------+----------------+--------------+-------|
+    | SteamOS      | ✅            |                |                |              |       |
+    | Ubuntu 16.04 | [[https://github.com/deepfire/nix-install-vendor-gl/issues/6][#6]], [[https://github.com/deepfire/nix-install-vendor-gl/issues/7][#7]]        |                |                |              |       |
+
 * Quickstart
 *** Prerequisites
 
