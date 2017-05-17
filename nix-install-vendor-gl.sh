@@ -82,7 +82,7 @@ usage() {
     --nix-vendor-gl-attr ATTR
                             Nixpkgs attribute path of the vendor GL drivers
                               Defaults are verndor specific, but look like
-                              `linuxPackages.nvidia_x11`
+                              'linuxPackages.nvidia_x11'
     --system-glxinfo PATH   Path to system 'glxinfo'.
                               Default (often good) is:  '${arg_system_glxinfo}'
     --nix-glxinfo PATH      Path to nix-installed 'glxinfo'.
@@ -193,6 +193,12 @@ compute_system_vendorgl_version() {
 	        amd-mesa ) echo ${nix_mesagl_version};;
 	        nvidia   ) echo ${system_vendorgl_version_string} | cut -d ' ' -f3;; esac; }
 
+nix_opengl_state() {
+        local stderr="`${arg_nix_glxinfo} 2>&1 >/dev/null`"
+        if test -z "$stderr"
+        then echo "ok"
+        else echo "broken"; fi; }
+
 nix_vendorgl_attribute() {
 	if test ! -z "${arg_nix_vendorgl_attr}"
 	then vendorgl_attribute=${arg_nix_vendorgl_attr}
@@ -236,7 +242,7 @@ server GLX vendor:                ${system_vendorgl_server_string}
 client GLX vendor:                ${system_vendorgl_client_string}
 system GL version string:         ${system_vendorgl_version_string}
 system GL broken:                 ${system_vendorgl_broken}
-system GL kind:                   ${system_vendorgl_kind}
+system GL kind:                   ${vendorgl}
 system GL version number:         ${system_vendorgl_version}
 
 system libGL.so.1:                ${system_libgl1_path}
@@ -245,7 +251,7 @@ $(ldd ${system_libgl1_path})
 
 Default Nix GL vendor:            ${nix_vendorgl_client_string}
 Default Nix GL version:           ${nix_opengl_version_string}
-Default Nix GL broken:            ${nix_opengl_broken}
+Default Nix GL broken:            $(nix_opengl_state)
 EOF
 }
 
@@ -314,7 +320,6 @@ EOF
         nix_vendorgl_server_string=`glxinfo_field ${arg_nix_glxinfo} 'server glx vendor string'`
         nix_vendorgl_client_string=`glxinfo_field ${arg_nix_glxinfo} 'client glx vendor string'`
         nix_opengl_version_string=`glxinfo_field ${arg_nix_glxinfo} 'OpenGL version string'`
-	nix_opengl_broken=`${arg_nix_glxinfo} >/dev/null 2>&1 && echo no || echo yes`
 
         ### query system 'glxinfo'
         system_vendorgl_server_string=`glxinfo_field ${arg_system_glxinfo} 'server glx vendor string'`
@@ -334,14 +339,17 @@ EOF
         ###
         if test $# -ge 1
         then argnz "OPERATION"; operation=$1; shift
-        else operation=${default_operation}; fi
+        else   operation=${default_operation}; fi
+        case ${operation} in
+                examine | install-vendor-gl );;
+                * ) fail 'Unknown operation: '${operation};; esac
 
-        test "${nix_opengl_broken}" = "yes" || test "${operation}" = "examine" || {
+        test "$(nix_opengl_state)" = "broken" || test "${operation}" = "examine" || {
 	                info "Nix-available GL seems to be okay (according to glxinfo exit status)."
 	                return 0; }
         test ! -f ${run_opengl_driver}/lib/libGL.so.1 || test "${operation}" = "examine" ||
 	        ! (LD_LIBRARY_PATH=${run_opengl_driver}/lib ${arg_nix_glxinfo} >/dev/null 2>&1) || {
-	                info "A global libGL.so.1 already seems to be installed at\n${run_opengl_driver}/lib/libGL.so.1, and it appears to be sufficient for\nthe Nix 'glxinfo'.\n\n  export LD_LIBRARY_PATH=${run_opengl_driver}/lib\n"
+	                info "libGL.so.1 already seems to be installed at\n${run_opengl_driver}/lib/libGL.so.1, and it appears to be sufficient for\nthe Nix 'glxinfo'.\n\n  export LD_LIBRARY_PATH=${run_opengl_driver}/lib\n"
 	                export LD_LIBRARY_PATH=${run_opengl_driver}/lib
 	                return 0; }
 
@@ -416,6 +424,7 @@ let vendorgl = (${vendorgl_attribute}.override {
 in buildEnv { name = "opengl-drivers"; paths = [ vendorgl ]; }
 EOF
 	        else
+                        info "Both the host system and Nix provide matching vendor GL driver versions."
 		        cat >${tmpnix} <<EOF
 with import <nixpkgs> { config = { allowUnfree = true; }; };
 let vendorgl = ${vendorgl_attribute}.override {
@@ -426,13 +435,17 @@ in buildEnv { name = "opengl-drivers"; paths = [ vendorgl ]; }
 EOF
 	        fi
 
-	        echo "Installing the vendor driver into: ${run_opengl_driver}"
+	        echo; echo "Installing the vendor driver into: ${run_opengl_driver}"
 	        nix_build_options='--no-build-output --max-jobs 4 --cores 0'
-	        NIX_PATH=nixpkgs=${arg_nixpkgs} ${nix_build} ${nix_build_options} ${tmpnix} ${arg_verbose:+-v}
+	        # NIX_PATH=nixpkgs=${arg_nixpkgs} ${nix_build} ${nix_build_options} ${tmpnix} ${arg_verbose:+-v}
 	        sudo NIX_PATH=nixpkgs=${arg_nixpkgs} ${nix_build} ${nix_build_options} ${tmpnix} ${arg_verbose:+-v} -o ${run_opengl_driver}
 	        rm -f ${tmpnix}
 
-	        cat <<EOF
+		export LD_LIBRARY_PATH=${run_opengl_driver}/lib
+
+	        case $(nix_opengl_state) in
+	                ok ) cat <<EOF
+
 Nix-compatible vendor GL driver is now installed at ${run_opengl_driver}
 
 To make them available to Nix-build applications you can now issue:
@@ -441,7 +454,47 @@ To make them available to Nix-build applications you can now issue:
 
 (Doing the export, in case you have sourced the file directly.)
 EOF
-	        export LD_LIBRARY_PATH=${run_opengl_driver}/lib;; esac
+	                     ;;
+                        broken ) cat <<EOF
+
+Nix-compatible vendor GL was installed at ${run_opengl_driver},
+
+..yet, for some reason, Nix-provided 'glxinfo' is still broken.
+
+Please, sumbit the output below '--- 8< ---', along with output of
+
+   ./nix-install-vendor-gl.sh examine
+
+as a bug report to:
+
+   https://github.com/deepfire/nix-install-vendor-gl/issues
+
+EOF
+		export LD_LIBRARY_PATH=${run_opengl_driver}/lib
+		echo '--------------------------- 8< ---------------------------'
+		ldd ${arg_nix_glxinfo} || true
+                ls -l ${run_opengl_driver}
+                ls ${run_opengl_driver}/lib/
+		${arg_nix_glxinfo} 2>&1 >/dev/null || true
+		echo '--------------------------- 8< ---------------------------'
+		cat <<EOF
+
+Nix-compatible vendor GL was installed at ${run_opengl_driver},
+
+..yet, for some reason, Nix-provided 'glxinfo' is still broken.
+
+Please, sumbit the outpug above '--- 8< ---', along with output of
+
+   ./nix-install-vendor-gl.sh examine
+
+as a bug report to:
+
+   https://github.com/deepfire/nix-install-vendor-gl/issues
+
+EOF
+		;;
+	    * )
+		fail "INTERNAL ERROR: unhandled output of 'nix_opengl_state': $(nix_opengl_state)";; esac;; esac
 }
 
 main "$@"
