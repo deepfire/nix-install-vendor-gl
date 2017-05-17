@@ -469,10 +469,12 @@ EOF
                         info "Both the host system and Nix provide matching vendor GL driver versions."
 		        cat >${tmpnix} <<EOF
 with import <nixpkgs> { config = { allowUnfree = true; }; };
-let vendorgl = ${vendorgl_attribute}.override {
+let vendorgl = (${vendorgl_attribute}.override {
       libsOnly = true;
       kernel   = null;
-    };
+    }).overrideAttrs (oldAttrs: rec {
+      useGLVND = 0;
+    });
 in buildEnv { name = "opengl-drivers"; paths = [ vendorgl ]; }
 EOF
 	        fi
