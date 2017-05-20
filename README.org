@@ -16,12 +16,12 @@
 
 *** OS/GPU test matrix
 
-    |              | nVidia/nvidia | nVidia/nouveau | AMD/AMDGPU-PRO | AMD/radeonsi | Intel |
-    |--------------+---------------+----------------+----------------+--------------+-------|
-    | SteamOS      | ✅            |                |                |              |       |
-    | Ubuntu 16.04 | ✅            |                |                |              |       |
-    | Ubuntu 16.10 | [[https://github.com/deepfire/nix-install-vendor-gl/issues/7][#7]]            |                |                |              |       |
-    | Ubuntu 17.04 |               |                |                |              |       |
+    |              | nvidia | nouveau | AMDGPU | radeonsi | Catalyst | Intel |
+    |--------------+--------+---------+--------+----------+----------+-------|
+    | SteamOS      | ✅     |         |        |          |          |       |
+    | Ubuntu 16.04 | ✅     |         |        |          |          |       |
+    | Ubuntu 16.10 | [[https://github.com/deepfire/nix-install-vendor-gl/issues/7][#7]]     |         |        |          |          |       |
+    | Ubuntu 17.04 |        |         |        |          |          |       |
 
 * Quickstart
 *** Prerequisites
