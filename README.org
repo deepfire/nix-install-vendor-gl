@@ -19,6 +19,7 @@
     |              | nvidia | nouveau | AMDGPU | radeonsi | Catalyst | Intel |
     |--------------+--------+---------+--------+----------+----------+-------|
     | SteamOS      | ✅     |         |        |          |          |       |
+    | Ubuntu 14.04 LTS | ✅     |         |        |          |          |       |
     | Ubuntu 16.04 | ✅     |         |        |          |          |       |
     | Ubuntu 16.10 | [[https://github.com/deepfire/nix-install-vendor-gl/issues/7][#7]]     |         |        |          |          |       |
     | Ubuntu 17.04 |        |         |        |          |          |       |
