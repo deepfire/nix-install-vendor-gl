@@ -63,6 +63,7 @@ arg_nix_glxinfo=${HOME}'/.nix-profile/bin/glxinfo'
 arg_nixpkgs_vendorgl_attr=
 arg_nixpkgs=
 arg_keep=
+arg_glvnd=1
 arg_dump_and_exit=
 arg_verbose=
 
@@ -98,6 +99,7 @@ usage() {
     --dump                  Dump internal variables & exit
     --explain               Explain why this program
     --keep                  Don't remove generated Nix expressions
+    --no-glvnd              Don't enable GLVND
     --help                  This.
     --verbose               Verbose operation
 
@@ -157,6 +159,7 @@ do
 	--verbose )                       arg_verbose='t';;
         --dump )                    arg_dump_and_exit='t';;
         --keep )                             arg_keep='t';;
+        --no-glvnd )                        arg_glvnd='0';;
         --explain )                           explain; exit 0;;
         --help )                                usage; exit 0;;
         "--"* )                                 usage "unknown option: $1"; exit 1;;
@@ -464,7 +467,7 @@ let vendorgl = (${vendorgl_attribute}.override {
 	url = "${vendorgl_package_url}";
 	sha256 = "${vendorgl_package_sha256}";
       };
-      useGLVND = 1;
+      useGLVND = ${arg_glvnd};
     });
 in buildEnv { name = "opengl-drivers"; paths = [ vendorgl ]; }
 EOF
@@ -476,7 +479,7 @@ let vendorgl = (${vendorgl_attribute}.override {
       libsOnly = true;
       kernel   = null;
     }).overrideAttrs (oldAttrs: rec {
-      useGLVND = 1;
+      useGLVND = ${arg_glvnd};
     });
 in buildEnv { name = "opengl-drivers"; paths = [ vendorgl ]; }
 EOF
