@@ -53,7 +53,6 @@ EOF
 ###
 default_operation='install-vendor-gl'
 run_opengl_driver='/run/opengl-driver'
-run_opengl_driver_drvref='/tmp/run-opengl-driver.drv'
 cachedir="${XDG_CACHE_DIR:-${HOME}/.cache}/nix-install-vendor-gl"
 fix_attempted=
 vendorgl_deriv_log=
@@ -489,8 +488,8 @@ EOF
 	        nix_build_options='--no-build-output --max-jobs 4 --cores 0'
 	        # NIX_PATH=nixpkgs=${arg_nixpkgs} ${nix_build} ${nix_build_options} ${tmpnix} ${arg_verbose:+-v}
 	        sudo NIX_PATH=nixpkgs=${arg_nixpkgs} ${nix_build} ${nix_build_options} ${tmpnix} ${arg_verbose:+-v} \
-                     --out-link ${run_opengl_driver} \
-                     --drv-link ${run_opengl_driver_drvref}
+                     --out-link ${run_opengl_driver}
+                run_opengl_driver_drvref=$(nix-store --query --deriver ${run_opengl_driver})
                 if test -z "${arg_keep}"
 	        then rm -f ${tmpnix}
                 fi
