@@ -1,5 +1,5 @@
 #!/bin/sh
-# (c) 2017 Косырев Сергей <_deepfire@feelingofgreen.ru>
+# (c) 2017 Косырев Сергей <kosyrev.serge@protonmail.com>
 #
 # Credits:  the original investigation of the issue is due to:
 #             clever @ #nixos, https://github.com/cleverca22
@@ -62,6 +62,7 @@ arg_system_glxinfo='/usr/bin/glxinfo'
 arg_nix_glxinfo=${HOME}'/.nix-profile/bin/glxinfo'
 arg_nixpkgs_vendorgl_attr=
 arg_nixpkgs=
+arg_keep=
 arg_dump_and_exit=
 arg_verbose=
 
@@ -96,6 +97,7 @@ usage() {
 
     --dump                  Dump internal variables & exit
     --explain               Explain why this program
+    --keep                  Don't remove generated Nix expressions
     --help                  This.
     --verbose               Verbose operation
 
@@ -154,6 +156,7 @@ do
 	--cls )                                  echo -ne "\033c";;
 	--verbose )                       arg_verbose='t';;
         --dump )                    arg_dump_and_exit='t';;
+        --keep )                             arg_keep='t';;
         --explain )                           explain; exit 0;;
         --help )                                usage; exit 0;;
         "--"* )                                 usage "unknown option: $1"; exit 1;;
@@ -461,7 +464,7 @@ let vendorgl = (${vendorgl_attribute}.override {
 	url = "${vendorgl_package_url}";
 	sha256 = "${vendorgl_package_sha256}";
       };
-      useGLVND = 0;
+      useGLVND = 1;
     });
 in buildEnv { name = "opengl-drivers"; paths = [ vendorgl ]; }
 EOF
@@ -473,7 +476,7 @@ let vendorgl = (${vendorgl_attribute}.override {
       libsOnly = true;
       kernel   = null;
     }).overrideAttrs (oldAttrs: rec {
-      useGLVND = 0;
+      useGLVND = 1;
     });
 in buildEnv { name = "opengl-drivers"; paths = [ vendorgl ]; }
 EOF
@@ -485,7 +488,9 @@ EOF
 	        sudo NIX_PATH=nixpkgs=${arg_nixpkgs} ${nix_build} ${nix_build_options} ${tmpnix} ${arg_verbose:+-v} \
                      --out-link ${run_opengl_driver} \
                      --drv-link ${run_opengl_driver_drvref}
-	        rm -f ${tmpnix}
+                if test -z "${arg_keep}"
+	        then rm -f ${tmpnix}
+                fi
                 run_opengl_driver_drv=`realpath -e ${run_opengl_driver_drvref} || true`
                 vendorgl_deriv=`nix-store --query --references ${run_opengl_driver_drv} | grep $(nixpkgs_vendorgl_package_id)`
                 vendorgl_deriv_hash=`echo ${vendorgl_deriv} | cut -c12- | cut -d- -f1`
