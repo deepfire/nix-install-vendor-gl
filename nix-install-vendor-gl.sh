@@ -484,21 +484,26 @@ in buildEnv { name = "opengl-drivers"; paths = [ vendorgl ]; }
 EOF
 	        fi
 
-	        echo; echo "Installing the vendor driver into: ${run_opengl_driver}"
+	        echo;
+                echo "Building vendor driver.."
 	        nix_build_options='--no-build-output --max-jobs 4 --cores 0'
-	        # NIX_PATH=nixpkgs=${arg_nixpkgs} ${nix_build} ${nix_build_options} ${tmpnix} ${arg_verbose:+-v}
-	        sudo NIX_PATH=nixpkgs=${arg_nixpkgs} ${nix_build} ${nix_build_options} ${tmpnix} ${arg_verbose:+-v} \
-                     --out-link ${run_opengl_driver}
-                run_opengl_driver_drvref=$(nix-store --query --deriver ${run_opengl_driver})
+                echo "NIX_PATH=nixpkgs=${arg_nixpkgs} ${nix_build} ${nix_build_options} ${tmpnix} ${arg_verbose:+-v}"
+	        driver_outpath=$(NIX_PATH=nixpkgs=${arg_nixpkgs} ${nix_build} ${nix_build_options} ${tmpnix} ${arg_verbose:+-v})
+                echo "Vendor driver built at: ${driver_outpath}"
+                driver_drvpath=$(nix-store --query --deriver ${driver_outpath})
+                driver_drvrealpath=`realpath -e ${driver_drvpath} || true`
+
+                echo "Installing the vendor driver into: ${run_opengl_driver}"
+                sudo rm -rf                  ${run_opengl_driver}
+                sudo cp -a ${driver_outpath} ${run_opengl_driver}
                 if test -z "${arg_keep}"
 	        then rm -f ${tmpnix}
                 fi
-                run_opengl_driver_drv=`realpath -e ${run_opengl_driver_drvref} || true`
-                vendorgl_deriv=`nix-store --query --references ${run_opengl_driver_drv} | grep $(nixpkgs_vendorgl_package_id)`
+                vendorgl_deriv=`nix-store --query --references ${driver_drvrealpath} | grep $(nixpkgs_vendorgl_package_id)`
                 vendorgl_deriv_hash=`echo ${vendorgl_deriv} | cut -c12- | cut -d- -f1`
                 vendorgl_deriv_log=`realpath /nix/var/log/nix/drvs/$(echo ${vendorgl_deriv_hash} | cut -c-2)/$(echo ${vendorgl_deriv_hash} | cut -c3-)-$(nixpkgs_vendorgl_package_id)-*`
                 echo
-                echo "GL driver derivation:      ${run_opengl_driver_drv}"
+                echo "GL driver derivation:      ${driver_drvrealpath}"
                 echo "Vendor driver derivation:  ${vendorgl_deriv}"
                 echo "Vendor driver build log:   ${vendorgl_deriv_log}"
 
